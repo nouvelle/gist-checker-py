@@ -2,6 +2,7 @@ from __future__ import annotations
 from pathlib import Path
 import xml.etree.ElementTree as ET
 import re
+import json
 
 from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
@@ -10,7 +11,11 @@ from grader.report import write_reports, push_results_to_google_sheets
 
 def _parse_pytest_fallback(log_path: Path) -> dict:
     """junit.xml が無い/読めない時のフォールバック：pytest.out をざっくり集計。"""
-    summary = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total_tests": 0, "tests": []}
+    summary = {
+        "source": "pytest.out",
+        "passed": 0, "failed": 0, "errors": 0, "skipped": 0,
+        "total_tests": 0, "tests": []
+    }
     if not log_path.exists():
         return summary
     text = log_path.read_text(encoding="utf-8", errors="ignore")
@@ -32,11 +37,9 @@ def _parse_pytest_fallback(log_path: Path) -> dict:
 
 def _parse_junit(junit_path: Path) -> dict:
     """
-    JUnit XML を集計。まず <testsuite> の属性（tests/failures/errors/skipped）を読む。
-    個別 <testcase> があれば明細も作る。ダメなら pytest.out フォールバック。
+    JUnit XML を集計。まず <testsuite> の属性（tests/failures/errors/skipped）で合計値を確定。
+    個別 <testcase> があれば明細も作る。失敗時は pytest.out フォールバック。
     """
-    base = {"passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total_tests": 0, "tests": []}
-
     if not junit_path.exists():
         return _parse_pytest_fallback(junit_path.with_name("pytest.out"))
 
@@ -44,23 +47,24 @@ def _parse_junit(junit_path: Path) -> dict:
         tree = ET.parse(str(junit_path))
         root = tree.getroot()
 
-        # testsuites or testsuite 配下の testsuite 群を列挙
         suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
+
         total = failed = errors = skipped = 0
         testcases = []
 
         for ts in suites:
-            t = int(ts.get("tests", 0))
-            f = int(ts.get("failures", 0))
-            e = int(ts.get("errors", 0))
-            s = int(ts.get("skipped", 0))
+            # 属性で合計を集計（これが一番確実）
+            t = int(ts.get("tests", 0) or 0)
+            f = int(ts.get("failures", 0) or 0)
+            e = int(ts.get("errors", 0) or 0)
+            s = int(ts.get("skipped", 0) or 0)
             total += t; failed += f; errors += e; skipped += s
 
             # 明細（あれば）
             for tc in ts.findall("testcase"):
                 cls = tc.get("classname") or ""
                 name = tc.get("name") or ""
-                dotted = (cls + ("." if cls and name else "") + name)
+                dotted = cls + ("." if cls and name else "") + name
                 outcome = "passed"
                 if tc.find("failure") is not None:
                     outcome = "failed"
@@ -71,10 +75,11 @@ def _parse_junit(junit_path: Path) -> dict:
                 testcases.append({"name": dotted, "outcome": outcome})
 
         passed = max(0, total - failed - errors - skipped)
-        base.update({"total_tests": total, "passed": passed, "failed": failed, "errors": errors, "skipped": skipped})
-        if testcases:
-            base["tests"] = testcases
-        return base
+        return {
+            "source": "junit",
+            "total_tests": total, "passed": passed, "failed": failed, "errors": errors, "skipped": skipped,
+            "tests": testcases
+        }
 
     except Exception:
         # 解析に失敗した場合はフォールバック
@@ -90,6 +95,7 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
         detect_and_fetch(url, str(submission_path))
     except FetchError as e:
         result.update({
+            "source": "fetch_error",
             "passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total_tests": 0,
             "tests": [], "notes": f"FetchError: {e}",
         })
@@ -101,6 +107,15 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     junit = work / "junit.xml"
     summary = _parse_junit(junit)
     result.update(summary)
+
+    # デバッグ用に各受験者ディレクトリへ書き出し
+    try:
+        (work / "summary_debug.json").write_text(
+            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+    except Exception:
+        pass
+
     return result
 
 
