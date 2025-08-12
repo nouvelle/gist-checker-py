@@ -1,14 +1,12 @@
 from __future__ import annotations
 from typing import List, Tuple
-import csv
 import os
 import json
 import gspread
 from google.oauth2.service_account import Credentials
 
-
 def load_from_file(list_path: str) -> List[Tuple[str, str]]:
-    rows = []
+    rows: List[Tuple[str, str]] = []
     with open(list_path, encoding="utf-8") as f:
         for i, line in enumerate(f, start=1):
             u = line.strip()
@@ -17,7 +15,6 @@ def load_from_file(list_path: str) -> List[Tuple[str, str]]:
             sid = f"{i:03d}"
             rows.append((sid, u))
     return rows
-
 
 def load_from_sheet(sheet_id: str, worksheet: str | None = None) -> List[Tuple[str, str]]:
     sa_json = os.environ.get("GOOGLE_SERVICE_ACCOUNT_JSON")
@@ -39,18 +36,4 @@ def load_from_sheet(sheet_id: str, worksheet: str | None = None) -> List[Tuple[s
         if not url:
             continue
         rows.append((sid, url))
-    return rows
-
-def load_urls(list_path: str) -> List[Tuple[str, str]]:
-    """gists.txt（1行1URL）を student_id 付き配列に正規化。
-    例: [("001", url1), ("002", url2), ...]
-    """
-    rows: List[Tuple[str, str]] = []
-    with open(list_path, encoding="utf-8") as f:
-        for i, line in enumerate(f, start=1):
-            u = line.strip()
-            if not u or u.startswith("#"):
-                continue
-            sid = f"{i:03d}"
-            rows.append((sid, u))
     return rows

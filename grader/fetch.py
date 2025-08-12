@@ -1,9 +1,7 @@
 from __future__ import annotations
 import os
 import re
-import json
 import requests
-from typing import Tuple
 
 GIST_RE = re.compile(r"https?://gist\.github\.com/[^/]+/([0-9a-f]+)")
 RAW_RE = re.compile(r"https?://gist\.githubusercontent\.com/.+/raw/.+/py-fnd-assessment-3\.py")
@@ -11,11 +9,8 @@ RAW_RE = re.compile(r"https?://gist\.githubusercontent\.com/.+/raw/.+/py-fnd-ass
 class FetchError(Exception):
     pass
 
-
 def detect_and_fetch(url: str, dest_path: str) -> None:
-    """URLがGistページ or raw URL のどちらでも py-fnd-assessment-3.py を取得して保存。
-    保存先は dest_path（例：/path/to/.out/001/submission.py）
-    """
+    """URLがGistページ or raw URL のどちらでも py-fnd-assessment-3.py を取得して保存。"""
     url = url.strip()
     if RAW_RE.match(url):
         _fetch_raw(url, dest_path)
@@ -35,7 +30,6 @@ def detect_and_fetch(url: str, dest_path: str) -> None:
     files = data.get("files", {})
     target = files.get("py-fnd-assessment-3.py")
     if not target:
-        # ファイル名ミスマッチの検出を助ける
         raise FetchError("Gistに 'py-fnd-assessment-3.py' が見つかりません。含まれるファイル: " + ", ".join(files.keys()))
 
     raw_url = target.get("raw_url")
@@ -43,7 +37,6 @@ def detect_and_fetch(url: str, dest_path: str) -> None:
         raise FetchError("raw_url を取得できませんでした")
 
     _fetch_raw(raw_url, dest_path)
-
 
 def _fetch_raw(raw_url: str, dest_path: str) -> None:
     rr = requests.get(raw_url, timeout=15)

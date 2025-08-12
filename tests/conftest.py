@@ -3,7 +3,6 @@ import os
 import pathlib
 import importlib.util
 import sys
-import types
 import pytest
 
 # 各問題の配点（20点×5 = 100点）
@@ -15,20 +14,16 @@ POINTS = {
     "q5": {"file_saved": 6, "labels_present": 8, "non_interactive": 6},
 }
 
-
 @pytest.fixture(scope="session")
 def score_board():
     return {"q1": {}, "q2": {}, "q3": {}, "q4": {}, "q5": {}}
 
-
 @pytest.fixture(scope="session")
 def write_scores(score_board):
-    # セッション終了時に JSON へ書き出し
     yield
     out = os.environ.get("SCORE_OUTPUT", "scores.json")
     with open(out, "w", encoding="utf-8") as f:
         json.dump(score_board, f, ensure_ascii=False, indent=2)
-
 
 @pytest.fixture
 def add_score(score_board):
@@ -37,9 +32,8 @@ def add_score(score_board):
         score_board[qkey][item] = pts
     return _add
 
-
 @pytest.fixture(scope="session")
-def submission_module(tmp_path_factory):
+def submission_module():
     # カレント（work_dir）にある submission.py を import
     p = pathlib.Path.cwd() / "submission.py"
     if not p.exists():
@@ -51,7 +45,6 @@ def submission_module(tmp_path_factory):
     spec.loader.exec_module(mod)
     return mod
 
-
 @pytest.fixture(scope="session")
 def fixture_csv_path():
     # work_dir にコピー済みを想定
@@ -60,8 +53,6 @@ def fixture_csv_path():
         pytest.skip("game_scores.csv が見つかりません")
     return str(p)
 
-
 @pytest.fixture(autouse=True)
 def _finalize_session(write_scores):
-    # セッション終了後に write_scores を呼び出すためのダミー
     yield

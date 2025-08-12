@@ -1,33 +1,13 @@
 from __future__ import annotations
-import csv
 import json
-import os
-import time
-from pathlib import Path
 from typing import List, Tuple
 
 from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
 from grader.report import write_reports, push_results_to_google_sheets
-from grader.sources import load_from_file, load_from_sheet
-
-
-# def load_urls(list_path: str) -> List[Tuple[str, str]]:
-#     """gists.txt（1行1URL）を student_id 付き配列に正規化。
-#     例: [("001", url1), ("002", url2), ...]
-#     """
-#     rows: List[Tuple[str, str]] = []
-#     with open(list_path, encoding="utf-8") as f:
-#         for i, line in enumerate(f, start=1):
-#             u = line.strip()
-#             if not u or u.startswith("#"):
-#                 continue
-#             sid = f"{i:03d}"
-#             rows.append((sid, u))
-#     return rows
-
 
 def grade_one(sid: str, url: str, out_dir: str) -> dict:
+    from pathlib import Path
     work = prepare_workdir(out_dir, sid)
 
     # 1) 提出物取得
@@ -46,7 +26,7 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     copy_fixtures(work)
 
     # 3) テスト実行
-    rc = run_pytests(work)
+    _ = run_pytests(work)
 
     # 4) スコア読込
     scores_file = work / "scores.json"
@@ -67,9 +47,10 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     result.update({"total": total, "q1": q1, "q2": q2, "q3": q3, "q4": q4, "q5": q5})
     return result
 
-
 def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
               sheet_id: str | None = None, sheet_tab: str | None = None) -> None:
+    from grader.sources import load_from_file, load_from_sheet
+
     if sheet_id:
         urls = load_from_sheet(sheet_id, sheet_tab)
     else:
@@ -80,12 +61,12 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
     for sid, url in urls:
         res = grade_one(sid, url, out_dir)
         results.append(res)
+
     write_reports(results, out_dir)
+
     if push_to_sheets:
-        # （採点結果の）Sheets追記は既存の実装のまま
         rows = _to_rows(results)
         push_results_to_google_sheets(rows)
-
 
 def _to_rows(results: list) -> list:
     import time
