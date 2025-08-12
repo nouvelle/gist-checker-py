@@ -14,12 +14,8 @@ on:
         description: "Worksheet name to read (optional; defaults to first sheet)"
         required: false
       result_tab:
-        description: "Worksheet name to write summary (optional; defaults to 'results' or first sheet)"
+        description: "Worksheet name to write results (wide format)"
         default: "results"
-        required: false
-      cases_tab:
-        description: "Worksheet name to write test case details (optional; defaults to 'results_cases')"
-        default: "results_cases"
         required: false
 
 jobs:
@@ -54,14 +50,12 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           RESULT_TAB: ${{ github.event.inputs.result_tab }}
-          CASES_TAB: ${{ github.event.inputs.cases_tab }}
         run: |
           SHEET_ID_INPUT="${{ github.event.inputs.sheet_id }}"
           # 入力がなければ Secrets を使用
           SHEET_ID=${SHEET_ID_INPUT:-${{ secrets.GOOGLE_SHEET_ID }}}
 
           echo "Using SHEET_ID=${SHEET_ID}"
-          # report.py が参照する書き込み用IDとしても設定
           export GOOGLE_SHEET_ID="${SHEET_ID}"
 
           python run.py \
@@ -95,8 +89,8 @@ jobs:
             echo "Top of results.csv:" >> $GITHUB_STEP_SUMMARY
             head -n 10 .out/results.csv | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
           fi
-          if [ -f .out/results_cases.csv ]; then
+          if [ -f .out/results_wide.csv ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "Top of results_cases.csv:" >> $GITHUB_STEP_SUMMARY
-            head -n 10 .out/results_cases.csv | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
+            echo "Top of results_wide.csv:" >> $GITHUB_STEP_SUMMARY
+            head -n 5 .out/results_wide.csv | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
           fi
