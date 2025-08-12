@@ -81,7 +81,8 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: grading-artifacts
-          path: .out/**
+          path: .out
+          include-hidden-files: true
           if-no-files-found: error
 
       - name: Job summary
