@@ -64,11 +64,12 @@ jobs:
             --out .out --push-to-sheets
 
       - name: Upload artifacts (logs & images)
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: grading-artifacts
-          path: .out
-          if-no-files-found: ignore
+          path: .out/**            # 再帰的に収集
+          if-no-files-found: error # 無ければ失敗にして気づける
 
       - name: Job summary
         if: always()
