@@ -50,7 +50,12 @@ jobs:
           RESULT_TAB: ${{ github.event.inputs.result_tab }}
         run: |
           SHEET_ID_INPUT="${{ github.event.inputs.sheet_id }}"
-          SHEET_ID=${SHEET_ID_INPUT:-${GOOGLE_SHEET_ID}}
+          # 入力がなければ Secrets（ある場合）を使用
+          SHEET_ID=${SHEET_ID_INPUT:-${{ secrets.GOOGLE_SHEET_ID }}}
+
+          echo "Using SHEET_ID=${SHEET_ID}"
+          # ← 書き込み側(report.py)が参照する環境変数をここで上書き
+          export GOOGLE_SHEET_ID="${SHEET_ID}"
 
           python run.py \
             --gists "${{ github.event.inputs.gists_path }}" \
