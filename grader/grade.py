@@ -1,13 +1,64 @@
 from __future__ import annotations
 import json
 from typing import List, Tuple
+from pathlib import Path
+import xml.etree.ElementTree as ET
 
 from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
 from grader.report import write_reports, push_results_to_google_sheets
 
+
+def _parse_junit(junit_path: Path) -> dict:
+    """junit.xml からテスト結果を集計（何問中いくつパスしたか＋各テストの結果）。"""
+    summary = {
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "total_tests": 0,
+        "tests": [],  # {name, outcome}
+    }
+    if not junit_path.exists():
+        return summary
+
+    try:
+        tree = ET.parse(str(junit_path))
+        root = tree.getroot()
+        suites = []
+        if root.tag == "testsuite":
+            suites = [root]
+        elif root.tag == "testsuites":
+            suites = list(root.findall("testsuite"))
+
+        tests = []
+        for ts in suites:
+            for tc in ts.findall("testcase"):
+                name = tc.get("classname")
+                name = (name + "." if name else "") + (tc.get("name") or "")
+                outcome = "passed"
+                if tc.find("failure") is not None:
+                    outcome = "failed"
+                elif tc.find("error") is not None:
+                    outcome = "error"
+                elif tc.find("skipped") is not None:
+                    outcome = "skipped"
+                tests.append({"name": name, "outcome": outcome})
+
+        summary["tests"] = tests
+        summary["total_tests"] = len(tests)
+        summary["passed"] = sum(1 for t in tests if t["outcome"] == "passed")
+        summary["failed"] = sum(1 for t in tests if t["outcome"] == "failed")
+        summary["errors"] = sum(1 for t in tests if t["outcome"] == "error")
+        summary["skipped"] = sum(1 for t in tests if t["outcome"] == "skipped")
+    except Exception:
+        # 解析失敗時は summary を初期値のまま返す
+        pass
+
+    return summary
+
+
 def grade_one(sid: str, url: str, out_dir: str) -> dict:
-    from pathlib import Path
     work = prepare_workdir(out_dir, sid)
 
     # 1) 提出物取得
@@ -17,8 +68,9 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
         detect_and_fetch(url, str(submission_path))
     except FetchError as e:
         result.update({
-            "total": 0, "q1": 0, "q2": 0, "q3": 0, "q4": 0, "q5": 0,
-            "notes": f"FetchError: {e}"
+            "passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total_tests": 0,
+            "tests": [],
+            "notes": f"FetchError: {e}",
         })
         return result
 
@@ -28,24 +80,13 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     # 3) テスト実行
     _ = run_pytests(work)
 
-    # 4) スコア読込
-    scores_file = work / "scores.json"
-    if scores_file.exists():
-        with open(scores_file, encoding="utf-8") as f:
-            scores = json.load(f)
-    else:
-        scores = {}
+    # 4) junit.xml からパス数を集計
+    junit = work / "junit.xml"
+    summary = _parse_junit(junit)
 
-    # 問題ごとに合計（存在しなければ0）
-    q1 = sum(scores.get("q1", {}).values())
-    q2 = sum(scores.get("q2", {}).values())
-    q3 = sum(scores.get("q3", {}).values())
-    q4 = sum(scores.get("q4", {}).values())
-    q5 = sum(scores.get("q5", {}).values())
-    total = q1 + q2 + q3 + q4 + q5
-
-    result.update({"total": total, "q1": q1, "q2": q2, "q3": q3, "q4": q4, "q5": q5})
+    result.update(summary)
     return result
+
 
 def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
               sheet_id: str | None = None, sheet_tab: str | None = None) -> None:
@@ -68,14 +109,21 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
         rows = _to_rows(results)
         push_results_to_google_sheets(rows)
 
+
 def _to_rows(results: list) -> list:
     import time
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     rows = []
     for r in results:
+        total = r.get("total_tests", 0)
+        passed = r.get("passed", 0)
+        failed = r.get("failed", 0)
+        errors = r.get("errors", 0)
+        skipped = r.get("skipped", 0)
+        rate = f"{(passed/total*100):.0f}%" if total else "0%"
         rows.append([
-            ts, r.get("student_id"), r.get("gist_url"), r.get("total", 0),
-            r.get("q1", 0), r.get("q2", 0), r.get("q3", 0), r.get("q4", 0), r.get("q5", 0),
-            r.get("notes", "")
+            ts, r.get("student_id"), r.get("gist_url"),
+            passed, total, failed, errors, skipped, rate,
+            r.get("notes", ""),
         ])
     return rows
