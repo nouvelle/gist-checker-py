@@ -115,19 +115,25 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
 
 
 def _to_rows(results: list) -> list:
+    """
+    Sheets 追記用の行を構築。
+    - pass_rate は 0〜1 の **数値** を渡す（Sheets で「パーセント」表示にするため）
+    - CSV は report.write_reports() 側で "100%" 形式の文字列を出力する
+    """
     import time
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
     rows = []
     for r in results:
-        total = r.get("total_tests", 0)
-        passed = r.get("passed", 0)
-        failed = r.get("failed", 0)
-        errors = r.get("errors", 0)
-        skipped = r.get("skipped", 0)
-        rate = f"{(passed/total*100):.0f}%" if total else "0%"
+        total = int(r.get("total_tests", 0) or 0)
+        passed = int(r.get("passed", 0) or 0)
+        failed = int(r.get("failed", 0) or 0)
+        errors = int(r.get("errors", 0) or 0)
+        skipped = int(r.get("skipped", 0) or 0)
+        rate_value = (passed / total) if total else 0.0  # 0〜1 の数値
+
         rows.append([
             ts, r.get("student_id"), r.get("gist_url"),
-            passed, total, failed, errors, skipped, rate,
+            passed, total, failed, errors, skipped, rate_value,
             r.get("notes", ""),
         ])
     return rows
