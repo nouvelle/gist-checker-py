@@ -43,18 +43,20 @@ jobs:
           python -m pip install -U pip
           pip install -r requirements.txt
 
+      - name: Ensure .out exists (pre-create)
+        run: mkdir -p .out
+
       - name: Run grading
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
-          GOOGLE_SHEET_ID: ${{ secrets.GOOGLE_SHEET_ID }}
           RESULT_TAB: ${{ github.event.inputs.result_tab }}
         run: |
           SHEET_ID_INPUT="${{ github.event.inputs.sheet_id }}"
-          # 入力がなければ Secrets（ある場合）を使用
+          # 入力がなければ Secrets を使用
           SHEET_ID=${SHEET_ID_INPUT:-${{ secrets.GOOGLE_SHEET_ID }}}
 
           echo "Using SHEET_ID=${SHEET_ID}"
-          # ← 書き込み側(report.py)が参照する環境変数をここで上書き
+          # report.py が参照する書き込み用IDとしても設定
           export GOOGLE_SHEET_ID="${SHEET_ID}"
 
           python run.py \
@@ -63,13 +65,24 @@ jobs:
             --sheet-tab "${{ github.event.inputs.sheet_tab }}" \
             --out .out --push-to-sheets
 
+      - name: Debug outputs
+        if: always()
+        run: |
+          echo "PWD=$(pwd)" && ls -la
+          echo ""
+          echo "Tree of .out:"
+          ls -la .out || true
+          echo ""
+          echo "Files under .out (maxdepth=2):"
+          find .out -maxdepth 2 -type f -print || true
+
       - name: Upload artifacts (logs & images)
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: grading-artifacts
-          path: .out/**            # 再帰的に収集
-          if-no-files-found: error # 無ければ失敗にして気づける
+          path: .out/**
+          if-no-files-found: error
 
       - name: Job summary
         if: always()

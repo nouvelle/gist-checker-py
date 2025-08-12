@@ -8,7 +8,7 @@ if __name__ == "__main__":
     ap.add_argument("--sheet-id", help="提出URLを読む Google Sheets のID")
     ap.add_argument("--sheet-tab", help="提出URLを読むワークシート名（未指定なら1枚目）")
     ap.add_argument("--out", default=".out", help="出力先ディレクトリ")
-    ap.add_argument("--push-to-sheets", action="store_true", help="採点結果をGoogle Sheetsに追記")
+    ap.add_argument("--push-to-sheets", action="store_true", help="Google Sheetsに追記")
     args = ap.parse_args()
 
     os.makedirs(args.out, exist_ok=True)
