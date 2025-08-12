@@ -20,18 +20,22 @@ def _parse_pytest_fallback(log_path: Path) -> dict:
         return summary
     text = log_path.read_text(encoding="utf-8", errors="ignore")
 
-    m = re.search(r"collected\s+(\d+)\s+items", text)
-    if m:
-        summary["total_tests"] = int(m.group(1))
-
     def pick(pat: str) -> int:
         mm = re.search(pat, text)
         return int(mm.group(1)) if mm else 0
 
-    summary["passed"]  = pick(r"(\d+)\s+passed")
-    summary["failed"]  = pick(r"(\d+)\s+failed")
-    summary["errors"]  = pick(r"(\d+)\s+error(?:s)?")
-    summary["skipped"] = pick(r"(\d+)\s+skipped")
+    collected = re.search(r"collected\s+(\d+)\s+items", text)
+    passed = pick(r"(\d+)\s+passed")
+    failed = pick(r"(\d+)\s+failed")
+    errors = pick(r"(\d+)\s+error(?:s)?")
+    skipped = pick(r"(\d+)\s+skipped")
+
+    total = int(collected.group(1)) if collected else (passed + failed + errors + skipped)
+
+    summary.update({
+        "passed": passed, "failed": failed, "errors": errors, "skipped": skipped,
+        "total_tests": total,
+    })
     return summary
 
 
@@ -53,7 +57,7 @@ def _parse_junit(junit_path: Path) -> dict:
         testcases = []
 
         for ts in suites:
-            # 属性で合計を集計（これが一番確実）
+            # 属性で合計を集計（確実）
             t = int(ts.get("tests", 0) or 0)
             f = int(ts.get("failures", 0) or 0)
             e = int(ts.get("errors", 0) or 0)
@@ -78,7 +82,7 @@ def _parse_junit(junit_path: Path) -> dict:
         return {
             "source": "junit",
             "total_tests": total, "passed": passed, "failed": failed, "errors": errors, "skipped": skipped,
-            "tests": testcases
+            "tests": testcases,
         }
 
     except Exception:
@@ -108,7 +112,7 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     summary = _parse_junit(junit)
     result.update(summary)
 
-    # デバッグ用に各受験者ディレクトリへ書き出し
+    # デバッグ出力
     try:
         (work / "summary_debug.json").write_text(
             json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
@@ -135,7 +139,7 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
 def _to_rows(results: list) -> list:
     """
     Sheets 追記用の行を構築。
-    - pass_rate は **"100%" の文字列**で渡す（ユーザー要望）
+    - pass_rate は **\"100%\" の文字列**で渡す（ユーザー要望）
     """
     import time
     ts = time.strftime("%Y-%m-%d %H:%M:%S")

@@ -23,6 +23,7 @@ def run_pytests(work_dir: Path, tests_dir: str = "tests", timeout_sec: int = 120
     pytest をサブプロセスで実行。
     - cwd は work_dir（conftest が submission.py を拾えるように）
     - tests_dir はリポジトリ内 tests の “絶対パス” を渡す
+    - junit.xml は カレント直下のファイル名で渡して、パスの二重解決を防ぐ
     """
     env = os.environ.copy()
     env.setdefault("MPLBACKEND", "Agg")
@@ -31,7 +32,7 @@ def run_pytests(work_dir: Path, tests_dir: str = "tests", timeout_sec: int = 120
     repo_root = Path(__file__).resolve().parent.parent  # grader/ の親 = リポジトリルート
     tests_abs = (repo_root / tests_dir).resolve()
 
-    junit = work_dir / "junit.xml"
+    junit_name = "junit.xml"          # ← ここがポイント（ファイル名だけ）
     log_path = work_dir / "pytest.out"
 
     cmd = [
@@ -39,7 +40,7 @@ def run_pytests(work_dir: Path, tests_dir: str = "tests", timeout_sec: int = 120
         str(tests_abs),
         "-q", "--timeout=20",
         "-o", "junit_family=xunit2",
-        f"--junitxml={junit}",
+        f"--junitxml={junit_name}",
     ]
     with open(log_path, "w", encoding="utf-8") as logf:
         proc = subprocess.run(
