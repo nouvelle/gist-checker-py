@@ -56,8 +56,11 @@ def _parse_junit(junit_path: Path) -> dict:
             s = int(ts.get("skipped", 0))
             total += t; failed += f; errors += e; skipped += s
 
+            # 明細（あれば）
             for tc in ts.findall("testcase"):
-                name = (tc.get("classname") or "") + ("." if tc.get("classname") else "") + (tc.get("name") or "")
+                cls = tc.get("classname") or ""
+                name = tc.get("name") or ""
+                dotted = (cls + ("." if cls and name else "") + name)
                 outcome = "passed"
                 if tc.find("failure") is not None:
                     outcome = "failed"
@@ -65,7 +68,7 @@ def _parse_junit(junit_path: Path) -> dict:
                     outcome = "error"
                 elif tc.find("skipped") is not None:
                     outcome = "skipped"
-                testcases.append({"name": name, "outcome": outcome})
+                testcases.append({"name": dotted, "outcome": outcome})
 
         passed = max(0, total - failed - errors - skipped)
         base.update({"total_tests": total, "passed": passed, "failed": failed, "errors": errors, "skipped": skipped})
@@ -117,8 +120,7 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
 def _to_rows(results: list) -> list:
     """
     Sheets 追記用の行を構築。
-    - pass_rate は 0〜1 の **数値** を渡す（Sheets で「パーセント」表示にするため）
-    - CSV は report.write_reports() 側で "100%" 形式の文字列を出力する
+    - pass_rate は **"100%" の文字列**で渡す（ユーザー要望）
     """
     import time
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -129,11 +131,11 @@ def _to_rows(results: list) -> list:
         failed = int(r.get("failed", 0) or 0)
         errors = int(r.get("errors", 0) or 0)
         skipped = int(r.get("skipped", 0) or 0)
-        rate_value = (passed / total) if total else 0.0  # 0〜1 の数値
+        rate_str = f"{(passed/total*100):.0f}%" if total else "0%"
 
         rows.append([
             ts, r.get("student_id"), r.get("gist_url"),
-            passed, total, failed, errors, skipped, rate_value,
+            passed, total, failed, errors, skipped, rate_str,
             r.get("notes", ""),
         ])
     return rows
