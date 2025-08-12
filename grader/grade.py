@@ -6,8 +6,11 @@ import json
 
 from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
-from grader.report import write_reports, push_results_to_google_sheets
-
+from grader.report import (
+    write_reports,
+    push_results_to_google_sheets,
+    push_testcases_to_google_sheets,
+)
 
 def _parse_pytest_fallback(log_path: Path) -> dict:
     """junit.xml が無い/読めない時のフォールバック：pytest.out をざっくり集計。"""
@@ -26,8 +29,8 @@ def _parse_pytest_fallback(log_path: Path) -> dict:
 
     collected = re.search(r"collected\s+(\d+)\s+items", text)
     passed = pick(r"(\d+)\s+passed")
-    failed = pick(r"(\d+)\s+failed")
-    errors = pick(r"(\d+)\s+error(?:s)?")
+    failed  = pick(r"(\d+)\s+failed")
+    errors  = pick(r"(\d+)\s+error(?:s)?")
     skipped = pick(r"(\d+)\s+skipped")
 
     total = int(collected.group(1)) if collected else (passed + failed + errors + skipped)
@@ -37,7 +40,6 @@ def _parse_pytest_fallback(log_path: Path) -> dict:
         "total_tests": total,
     })
     return summary
-
 
 def _parse_junit(junit_path: Path) -> dict:
     """
@@ -76,7 +78,8 @@ def _parse_junit(junit_path: Path) -> dict:
                     outcome = "error"
                 elif tc.find("skipped") is not None:
                     outcome = "skipped"
-                testcases.append({"name": dotted, "outcome": outcome})
+                tsec = float(tc.get("time", 0) or 0)
+                testcases.append({"name": dotted, "outcome": outcome, "time": tsec})
 
         passed = max(0, total - failed - errors - skipped)
         return {
@@ -88,7 +91,6 @@ def _parse_junit(junit_path: Path) -> dict:
     except Exception:
         # 解析に失敗した場合はフォールバック
         return _parse_pytest_fallback(junit_path.with_name("pytest.out"))
-
 
 def grade_one(sid: str, url: str, out_dir: str) -> dict:
     work = prepare_workdir(out_dir, sid)
@@ -122,7 +124,6 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
 
     return result
 
-
 def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
               sheet_id: str | None = None, sheet_tab: str | None = None) -> None:
     from grader.sources import load_from_file, load_from_sheet
@@ -134,12 +135,14 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
     if push_to_sheets:
         rows = _to_rows(results)
         push_results_to_google_sheets(rows)
-
+        case_rows = _to_case_rows(results)
+        if case_rows:
+            push_testcases_to_google_sheets(case_rows)
 
 def _to_rows(results: list) -> list:
     """
-    Sheets 追記用の行を構築。
-    - pass_rate は **\"100%\" の文字列**で渡す（ユーザー要望）
+    Sheets 追記用の行を構築（サマリ）。
+    - pass_rate は **"100%" の文字列**で渡す（ユーザー要望）
     """
     import time
     ts = time.strftime("%Y-%m-%d %H:%M:%S")
@@ -157,4 +160,21 @@ def _to_rows(results: list) -> list:
             passed, total, failed, errors, skipped, rate_str,
             r.get("notes", ""),
         ])
+    return rows
+
+def _to_case_rows(results: list) -> list:
+    """各テストケース明細を Sheets 追記用の行に展開。"""
+    import time
+    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    rows = []
+    for r in results:
+        sid = r.get("student_id")
+        url = r.get("gist_url")
+        for tc in r.get("tests", []) or []:
+            rows.append([
+                ts, sid, url,
+                tc.get("name", ""),
+                tc.get("outcome", ""),
+                tc.get("time", 0),
+            ])
     return rows

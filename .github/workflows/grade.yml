@@ -14,8 +14,12 @@ on:
         description: "Worksheet name to read (optional; defaults to first sheet)"
         required: false
       result_tab:
-        description: "Worksheet name to write results (optional; defaults to 'results' or first sheet)"
+        description: "Worksheet name to write summary (optional; defaults to 'results' or first sheet)"
         default: "results"
+        required: false
+      cases_tab:
+        description: "Worksheet name to write test case details (optional; defaults to 'results_cases')"
+        default: "results_cases"
         required: false
 
 jobs:
@@ -50,6 +54,7 @@ jobs:
         env:
           GOOGLE_SERVICE_ACCOUNT_JSON: ${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}
           RESULT_TAB: ${{ github.event.inputs.result_tab }}
+          CASES_TAB: ${{ github.event.inputs.cases_tab }}
         run: |
           SHEET_ID_INPUT="${{ github.event.inputs.sheet_id }}"
           # 入力がなければ Secrets を使用
@@ -69,12 +74,8 @@ jobs:
         if: always()
         run: |
           echo "PWD=$(pwd)" && ls -la
-          echo ""
-          echo "Tree of .out:"
-          ls -la .out || true
-          echo ""
-          echo "Files under .out (maxdepth=2):"
-          find .out -maxdepth 2 -type f -print || true
+          echo "\nTree of .out:" && ls -la .out || true
+          echo "\nFiles under .out (maxdepth=2):" && find .out -maxdepth 2 -type f -print || true
 
       - name: Upload artifacts (logs & images)
         if: always()
@@ -93,4 +94,9 @@ jobs:
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "Top of results.csv:" >> $GITHUB_STEP_SUMMARY
             head -n 10 .out/results.csv | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
+          fi
+          if [ -f .out/results_cases.csv ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "Top of results_cases.csv:" >> $GITHUB_STEP_SUMMARY
+            head -n 10 .out/results_cases.csv | sed 's/^/    /' >> $GITHUB_STEP_SUMMARY
           fi
