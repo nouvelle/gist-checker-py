@@ -4,17 +4,17 @@ on:
   workflow_dispatch:
     inputs:
       gists_path:
-        description: "Path to gists list file (optional if using sheet)"
+        description: "Gist URL一覧のファイルパス（シートを使用する場合は入力不要）"
         default: ""
         required: false
       sheet_id:
-        description: "Google Sheet ID to read gist URLs (optional; defaults to secret)"
+        description: "Gist URL を読み込む Google スプレッドシートの ID（任意、省略時はシークレットの値を使用）"
         required: false
       sheet_tab:
-        description: "Worksheet name to read (optional; defaults to first sheet)"
+        description: "読み込むワークシート名（任意、省略時は最初のシートを使用）"
         required: false
       result_tab:
-        description: "Worksheet name to write results (wide format)"
+        description: "結果を書き込むワークシート名"
         default: "results"
         required: false
 

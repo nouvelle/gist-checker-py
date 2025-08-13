@@ -16,7 +16,7 @@ BASE_HEADERS = [
 
 
 def write_reports(results: list, out_dir: str) -> None:
-    """結果を CSV / JSON に書き出す。CSV はサマリ＋（おまけで）横展開版も保存。"""
+    """結果を CSV / JSON に書き出す。CSV はサマリも保存。"""
     os.makedirs(out_dir, exist_ok=True)
 
     # --- サマリ CSV ---

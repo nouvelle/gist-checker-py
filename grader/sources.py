@@ -37,7 +37,7 @@ def load_from_sheet(sheet_id: str, worksheet: str | None = None) -> List[Tuple[s
     """
     Google Sheets から提出URLを読む。
     対応ヘッダ（先勝ち）:
-      - 学籍/氏名:  "Name", "student_id"
+      - 氏名:  "Name", "student_id"
       - GistURL :  "Gist URL", "gist_url"
     いずれも無ければ、Name は連番(001,002,...)、URL は空ならスキップ。
     """
@@ -55,7 +55,7 @@ def load_from_sheet(sheet_id: str, worksheet: str | None = None) -> List[Tuple[s
     values = ws.get_all_records()  # 1行目をヘッダとして辞書化
     rows: List[Tuple[str, str]] = []
     for i, rec in enumerate(values, start=1):
-        # ヘッダの候補を順に探す（新: Name / Gist URL、旧: student_id / gist_url）
+        # ヘッダの候補を順に探す（Name / Gist URL or student_id / gist_url）
         sid = _pick(rec, ["Name", "student_id"]) or f"{i:03d}"
         url = _pick(rec, ["Gist URL", "gist_url"]) or ""
         if not url:

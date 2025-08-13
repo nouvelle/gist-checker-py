@@ -32,7 +32,7 @@ def run_pytests(work_dir: Path, tests_dir: str = "tests", timeout_sec: int = 120
     repo_root = Path(__file__).resolve().parent.parent  # grader/ の親 = リポジトリルート
     tests_abs = (repo_root / tests_dir).resolve()
 
-    junit_name = "junit.xml"          # ← ここがポイント（ファイル名だけ）
+    junit_name = "junit.xml"
     log_path = work_dir / "pytest.out"
 
     cmd = [
