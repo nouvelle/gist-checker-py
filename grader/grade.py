@@ -1,77 +1,43 @@
 from __future__ import annotations
+import json
+from typing import List, Tuple
 from pathlib import Path
 import xml.etree.ElementTree as ET
-import re
-import json
+from datetime import datetime
+from zoneinfo import ZoneInfo  # ← 追加：標準ライブラリでJST
 
 from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
-from grader.report import (
-    write_reports,
-    push_results_wide_to_google_sheets,  # ← 追加：横展開で1枚に追記
-)
-
-
-def _parse_pytest_fallback(log_path: Path) -> dict:
-    """junit.xml が無い/読めない時のフォールバック：pytest.out をざっくり集計。"""
-    summary = {
-        "source": "pytest.out",
-        "passed": 0, "failed": 0, "errors": 0, "skipped": 0,
-        "total_tests": 0, "tests": []
-    }
-    if not log_path.exists():
-        return summary
-    text = log_path.read_text(encoding="utf-8", errors="ignore")
-
-    def pick(pat: str) -> int:
-        mm = re.search(pat, text)
-        return int(mm.group(1)) if mm else 0
-
-    collected = re.search(r"collected\s+(\d+)\s+items", text)
-    passed = pick(r"(\d+)\s+passed")
-    failed  = pick(r"(\d+)\s+failed")
-    errors  = pick(r"(\d+)\s+error(?:s)?")
-    skipped = pick(r"(\d+)\s+skipped")
-
-    total = int(collected.group(1)) if collected else (passed + failed + errors + skipped)
-
-    summary.update({
-        "passed": passed, "failed": failed, "errors": errors, "skipped": skipped,
-        "total_tests": total,
-    })
-    return summary
+from grader.report import write_reports, push_results_to_google_sheets
 
 
 def _parse_junit(junit_path: Path) -> dict:
-    """
-    JUnit XML を集計。まず <testsuite> の属性（tests/failures/errors/skipped）で合計値を確定。
-    個別 <testcase> があれば明細も作る。失敗時は pytest.out フォールバック。
-    """
+    """junit.xml からテスト結果を集計（何問中いくつパスしたか＋各テストの結果）。"""
+    summary = {
+        "passed": 0,
+        "failed": 0,
+        "errors": 0,
+        "skipped": 0,
+        "total_tests": 0,
+        "tests": [],  # {name, outcome}
+    }
     if not junit_path.exists():
-        return _parse_pytest_fallback(junit_path.with_name("pytest.out"))
+        return summary
 
     try:
         tree = ET.parse(str(junit_path))
         root = tree.getroot()
+        suites = []
+        if root.tag == "testsuite":
+            suites = [root]
+        elif root.tag == "testsuites":
+            suites = list(root.findall("testsuite"))
 
-        suites = [root] if root.tag == "testsuite" else list(root.findall("testsuite"))
-
-        total = failed = errors = skipped = 0
-        testcases = []
-
+        tests = []
         for ts in suites:
-            # 属性で合計を集計（確実）
-            t = int(ts.get("tests", 0) or 0)
-            f = int(ts.get("failures", 0) or 0)
-            e = int(ts.get("errors", 0) or 0)
-            s = int(ts.get("skipped", 0) or 0)
-            total += t; failed += f; errors += e; skipped += s
-
-            # 明細（あれば）
             for tc in ts.findall("testcase"):
-                cls = tc.get("classname") or ""
-                name = tc.get("name") or ""
-                dotted = cls + ("." if cls and name else "") + name
+                name = tc.get("classname")
+                name = (name + "." if name else "") + (tc.get("name") or "")
                 outcome = "passed"
                 if tc.find("failure") is not None:
                     outcome = "failed"
@@ -79,73 +45,81 @@ def _parse_junit(junit_path: Path) -> dict:
                     outcome = "error"
                 elif tc.find("skipped") is not None:
                     outcome = "skipped"
-                tsec = float(tc.get("time", 0) or 0)
-                testcases.append({"name": dotted, "outcome": outcome, "time": tsec})
+                tests.append({"name": name, "outcome": outcome})
 
-        passed = max(0, total - failed - errors - skipped)
-        return {
-            "source": "junit",
-            "total_tests": total, "passed": passed, "failed": failed, "errors": errors, "skipped": skipped,
-            "tests": testcases,
-        }
-
+        summary["tests"] = tests
+        summary["total_tests"] = len(tests)
+        summary["passed"] = sum(1 for t in tests if t["outcome"] == "passed")
+        summary["failed"] = sum(1 for t in tests if t["outcome"] == "failed")
+        summary["errors"] = sum(1 for t in tests if t["outcome"] == "error")
+        summary["skipped"] = sum(1 for t in tests if t["outcome"] == "skipped")
     except Exception:
-        # 解析に失敗した場合はフォールバック
-        return _parse_pytest_fallback(junit_path.with_name("pytest.out"))
+        # 解析失敗時は summary を初期値のまま返す
+        pass
+
+    return summary
 
 
 def grade_one(sid: str, url: str, out_dir: str) -> dict:
     work = prepare_workdir(out_dir, sid)
+
+    # 1) 提出物取得
     submission_path = work / "submission.py"
     result = {"student_id": sid, "gist_url": url, "notes": ""}
-
     try:
         detect_and_fetch(url, str(submission_path))
     except FetchError as e:
         result.update({
-            "source": "fetch_error",
             "passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total_tests": 0,
-            "tests": [], "notes": f"FetchError: {e}",
+            "tests": [],
+            "notes": f"FetchError: {e}",
         })
         return result
 
+    # 2) フィクスチャ配置
     copy_fixtures(work)
+
+    # 3) テスト実行
     _ = run_pytests(work)
 
+    # 4) junit.xml からパス数を集計
     junit = work / "junit.xml"
     summary = _parse_junit(junit)
+
     result.update(summary)
-
-    # デバッグ出力
-    try:
-        (work / "summary_debug.json").write_text(
-            json.dumps(result, ensure_ascii=False, indent=2), encoding="utf-8"
-        )
-    except Exception:
-        pass
-
     return result
 
 
 def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
               sheet_id: str | None = None, sheet_tab: str | None = None) -> None:
     from grader.sources import load_from_file, load_from_sheet
-    urls = load_from_sheet(sheet_id, sheet_tab) if sheet_id else load_from_file(list_path)
 
-    results = [grade_one(sid, url, out_dir) for sid, url in urls]
+    if sheet_id:
+        urls = load_from_sheet(sheet_id, sheet_tab)
+    else:
+        assert list_path, "list_path か sheet_id のどちらかが必要です"
+        urls = load_from_file(list_path)
+
+    results = []
+    for sid, url in urls:
+        res = grade_one(sid, url, out_dir)
+        results.append(res)
+
     write_reports(results, out_dir)
 
     if push_to_sheets:
-        push_results_wide_to_google_sheets(results)  # ← これ1発で横展開して追記
+        rows = _to_rows(results)
+        push_results_to_google_sheets(rows)
 
 
 def _to_rows(results: list) -> list:
     """
-    （ローカルCSV用）サマリのみの行を構築。Sheets は push_results_wide_to_google_sheets() を使用。
-    - pass_rate は **"100%" の文字列**で出力
+    Sheets 追記用の行を構築。
+    - time は JST（Asia/Tokyo）
+    - pass_rate は **"100%" の文字列**で渡す
     """
-    import time
-    ts = time.strftime("%Y-%m-%d %H:%M:%S")
+    ts = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M:%S")
+
     rows = []
     for r in results:
         total = int(r.get("total_tests", 0) or 0)
