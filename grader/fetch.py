@@ -4,13 +4,13 @@ import re
 import requests
 
 GIST_RE = re.compile(r"https?://gist\.github\.com/[^/]+/([0-9a-f]+)")
-RAW_RE = re.compile(r"https?://gist\.githubusercontent\.com/.+/raw/.+/py-fnd-assessment-3\.py")
+RAW_RE = re.compile(r"https?://gist\.githubusercontent\.com/.+/raw/.+/assessment-3\.py")
 
 class FetchError(Exception):
     pass
 
 def detect_and_fetch(url: str, dest_path: str) -> None:
-    """URLがGistページ or raw URL のどちらでも py-fnd-assessment-3.py を取得して保存。"""
+    """URLがGistページ or raw URL のどちらでも assessment-3.py を取得して保存。"""
     url = url.strip()
     if RAW_RE.match(url):
         _fetch_raw(url, dest_path)
@@ -28,9 +28,9 @@ def detect_and_fetch(url: str, dest_path: str) -> None:
     data = r.json()
 
     files = data.get("files", {})
-    target = files.get("py-fnd-assessment-3.py")
+    target = files.get("assessment-3.py")
     if not target:
-        raise FetchError("Gistに 'py-fnd-assessment-3.py' が見つかりません。含まれるファイル: " + ", ".join(files.keys()))
+        raise FetchError("Gistに 'assessment-3.py' が見つかりません。含まれるファイル: " + ", ".join(files.keys()))
 
     raw_url = target.get("raw_url")
     if not raw_url:

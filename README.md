@@ -1,6 +1,6 @@
 # Python 自動採点ツール
 
-GitHub Actions 上で、受講生の **Gist 提出**（`py-fnd-assessment-3.py`）を自動で取得→テスト実行→**Google スプレッドシートに結果を書き込み**ます。ローカルでも同じ処理を実行できます。
+GitHub Actions 上で、受講生の **Gist 提出**（`assessment-3.py`）を自動で取得→テスト実行→**Google スプレッドシートに結果を書き込み**ます。ローカルでも同じ処理を実行できます。
 
 ---
 
@@ -17,7 +17,7 @@ GitHub Actions 上で、受講生の **Gist 提出**（`py-fnd-assessment-3.py`�
 
 * GitHub Actions：**GitHub-hosted runner**
 * Google アカウント（スプレッドシート利用）
-* 受講生は **Gist（公開）** に `py-fnd-assessment-3.py` をアップロード
+* 受講生は **Gist（公開）** に `assessment-3.py` をアップロード
 
 ---
 
@@ -113,7 +113,7 @@ python run.py --sheet-id $GOOGLE_SHEET_ID --sheet-tab <入力タブ名> --out .o
 
 ## テスト仕様（課題要件）
 
-学生の提出ファイル：**`py-fnd-assessment-3.py`**（Gist）。採点器では `submission.py` として実行。
+生徒の提出ファイル：**`assessment-3.py`**（Gist）。採点器では `submission.py` として実行。
 
 1. `load_game_data(filename)`
 
@@ -144,7 +144,7 @@ Google Sheets（入力: Name, Gist URL）
            │
 workflow_dispatch（GitHub Actions）
            │
-  fetch：Gist から py-fnd-assessment-3.py を保存（submission.py として）
+  fetch：Gist から assessment-3.py を保存（submission.py として）
            │
   pytest：tests/*.py を実行 → junit.xml / pytest.out 生成
            │
@@ -187,7 +187,7 @@ workflow_dispatch（GitHub Actions）
 * **全テストが error（`ModuleNotFoundError`）**：学生コードが外部ライブラリを `import`。必要なら `requirements.txt` に追加
 * **`total_tests` が 0**：JUnit が読めていない可能性 → `.out/<ID>/summary_debug.json` の `source` を確認（`junit` が理想、`pytest.out` はフォールバック）
 * **Sheets に書かれない**：`GOOGLE_SERVICE_ACCOUNT_JSON` / `GOOGLE_SHEET_ID` / シェア設定（サービスアカウントに権限付与）を再確認
-* **Gist に `py-fnd-assessment-3.py` が無い**：`FetchError` を `notes` に記録。ファイル名を合わせてもらうか、`grader/fetch.py` を拡張（別名許可）
+* **Gist に `assessment-3.py` が無い**：`FetchError` を `notes` に記録。ファイル名を合わせてもらうか、`grader/fetch.py` を拡張（別名許可）
 
 ---
 
