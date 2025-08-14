@@ -8,7 +8,7 @@ from zoneinfo import ZoneInfo  # ← 追加：標準ライブラリでJST
 
 from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
-from grader.report import write_reports, push_results_to_google_sheets
+from grader.report import write_reports, push_results_wide_to_google_sheets
 
 
 def _parse_junit(junit_path: Path) -> dict:
@@ -100,38 +100,8 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
         assert list_path, "list_path か sheet_id のどちらかが必要です"
         urls = load_from_file(list_path)
 
-    results = []
-    for sid, url in urls:
-        res = grade_one(sid, url, out_dir)
-        results.append(res)
-
+    results = [grade_one(sid, url, out_dir) for sid, url in urls]
     write_reports(results, out_dir)
 
     if push_to_sheets:
-        rows = _to_rows(results)
-        push_results_to_google_sheets(rows)
-
-
-def _to_rows(results: list) -> list:
-    """
-    Sheets 追記用の行を構築。
-    - time は JST（Asia/Tokyo）
-    - pass_rate は **"100%" の文字列**で渡す
-    """
-    ts = datetime.now(ZoneInfo("Asia/Tokyo")).strftime("%Y-%m-%d %H:%M:%S")
-
-    rows = []
-    for r in results:
-        total = int(r.get("total_tests", 0) or 0)
-        passed = int(r.get("passed", 0) or 0)
-        failed = int(r.get("failed", 0) or 0)
-        errors = int(r.get("errors", 0) or 0)
-        skipped = int(r.get("skipped", 0) or 0)
-        rate_str = f"{(passed/total*100):.0f}%" if total else "0%"
-
-        rows.append([
-            ts, r.get("student_id"), r.get("gist_url"),
-            passed, total, failed, errors, skipped, rate_str,
-            r.get("notes", ""),
-        ])
-    return rows
+        push_results_wide_to_google_sheets(results)
