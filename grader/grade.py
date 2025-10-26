@@ -11,6 +11,21 @@ from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
 from grader.report import write_reports, push_results_wide_to_google_sheets
 
 
+def _pick_tests_dir_from_target(target_filename: str) -> str:
+    """
+    target_filename からテストディレクトリを判定。
+    - assessment-2.py → tests_assessment_2
+    - assessment-3.py → tests_assessment_3
+    """
+    u = (target_filename or "").lower()
+    if "assessment-2.py" in u:
+        return "tests_assessment_2"
+    if "assessment-3.py" in u:
+        return "tests_assessment_3"
+    return "tests_assessment_3"  # デフォルト
+
+
+
 def _parse_junit(junit_path: Path) -> dict:
     """junit.xml からテスト結果を集計（何問中いくつパスしたか＋各テストの結果）。"""
     summary = {
@@ -90,8 +105,14 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     return result
 
 
-def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
-              sheet_id: str | None = None, sheet_tab: str | None = None) -> None:
+def grade_all(
+    list_path: str | None,
+    out_dir: str,
+    push_to_sheets: bool = False,
+    sheet_id: str | None = None,
+    sheet_tab: str | None = None,
+    target_filename: str = "assessment-3.py"
+) -> None:
     from grader.sources import load_from_file, load_from_sheet
 
     if sheet_id:
@@ -100,7 +121,10 @@ def grade_all(list_path: str | None, out_dir: str, push_to_sheets: bool = False,
         assert list_path, "list_path か sheet_id のどちらかが必要です"
         urls = load_from_file(list_path)
 
-    results = [grade_one(sid, url, out_dir) for sid, url in urls]
+    results = [
+        grade_one(sid, url, out_dir, target_filename=target_filename)
+        for sid, url in urls
+    ]
     write_reports(results, out_dir)
 
     if push_to_sheets:

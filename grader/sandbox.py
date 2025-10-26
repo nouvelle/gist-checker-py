@@ -18,7 +18,7 @@ def copy_fixtures(work_dir: Path, fixtures_dir: str = "fixtures") -> None:
     shutil.copy2(src, dst)
 
 
-def run_pytests(work_dir: Path, tests_dir: str = "tests", timeout_sec: int = 120) -> int:
+def run_pytests(work_dir: Path, tests_dir: str = "tests_assessment_3", timeout_sec: int = 120) -> int:
     """
     pytest をサブプロセスで実行。
     - cwd は work_dir（conftest が submission.py を拾えるように）

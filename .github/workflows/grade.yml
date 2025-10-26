@@ -17,6 +17,10 @@ on:
         description: "結果を書き込むワークシート名"
         default: "results"
         required: false
+      target_file:
+        description: "採点対象のファイル名（assessment-2.py / assessment-3.py）"
+        default: "assessment-3.py"
+        required: true
 
 jobs:
   grade:
@@ -62,7 +66,8 @@ jobs:
             --gists "${{ github.event.inputs.gists_path }}" \
             --sheet-id "${SHEET_ID}" \
             --sheet-tab "${{ github.event.inputs.sheet_tab }}" \
-            --out .out --push-to-sheets
+            --out .out --push-to-sheets \
+            --target-file "${{ github.event.inputs.target_file }}"
 
       - name: Debug outputs
         if: always()
