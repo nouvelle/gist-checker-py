@@ -1,4 +1,3 @@
-# 安全に submission.py を読み込むための簡易版 conftest
 import ast
 import pathlib
 import types
@@ -7,9 +6,8 @@ import pytest
 
 def _safe_import_submission(path: pathlib.Path):
     """
-    提出物 submission.py を『安全インポート』する。
-    - トップレベル実行文（関数呼び出し・print 等）は無視
-    - Import / ImportFrom / FunctionDef / ClassDef のみ評価対象
+    提出物 submission.py を安全にインポートする。
+    トップレベル実行文は無視して関数定義などだけ評価。
     """
     src = path.read_text(encoding="utf-8")
     tree = ast.parse(src, filename=str(path))
@@ -29,7 +27,7 @@ def _safe_import_submission(path: pathlib.Path):
 
 @pytest.fixture(scope="session")
 def submission_module():
-    p = pathlib.Path.cwd() / "submission.py"
-    if not p.exists():
+    path = pathlib.Path.cwd() / "submission.py"
+    if not path.exists():
         pytest.skip("submission.py が見つかりません")
-    return _safe_import_submission(p)
+    return _safe_import_submission(path)
