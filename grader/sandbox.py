@@ -19,27 +19,32 @@ def copy_fixtures(work_dir: Path, fixtures_dir: str = "fixtures") -> None:
 
 
 def run_pytests(work_dir: Path, tests_dir: str = "tests_assessment_3", timeout_sec: int = 120) -> int:
-    project_root = Path(__file__).resolve().parents[1]
-    tests_path = project_root / tests_dir  # ← conftestを含むディレクトリを直接指定
+    """
+    pytest をサブプロセスで実行。
+    - cwd は work_dir（conftest が submission.py を拾えるように）
+    - tests_dir はリポジトリ内 tests の “絶対パス” を渡す
+    - junit.xml は カレント直下のファイル名で渡して、パスの二重解決を防ぐ
+    """
+    env = os.environ.copy()
+    env.setdefault("MPLBACKEND", "Agg")
+    env["PYTHONPATH"] = str(work_dir)
 
-    # デバッグ: conftest の存在をログに出す（後で確認しやすい）
-    debug = [
-        f"[sandbox] project_root={project_root}",
-        f"[sandbox] tests_path={tests_path}",
-        f"[sandbox] conftest_exists={(tests_path / 'conftest.py').exists()}",
+    repo_root = Path(__file__).resolve().parent.parent  # grader/ の親 = リポジトリルート
+    tests_abs = (repo_root / tests_dir).resolve()
+
+    junit_name = "junit.xml"
+    log_path = work_dir / "pytest.out"
+
+    cmd = [
+        sys.executable, "-m", "pytest",
+        str(tests_abs),
+        "-q", "--timeout=20",
+        "-o", "junit_family=xunit2",
+        f"--junitxml={junit_name}",
     ]
-    (work_dir / "pytest_debug.txt").write_text("\n".join(debug), encoding="utf-8")
-
-    junit_path = work_dir / "junit.xml"
-    cmd = ["pytest", "-q", str(tests_path), "--junit-xml", str(junit_path)]
-
-    proc = subprocess.run(
-        cmd,
-        cwd=work_dir,
-        timeout=timeout_sec,
-        capture_output=True,
-        text=True,
-    )
-    (work_dir / "pytest_stdout.txt").write_text(proc.stdout or "", encoding="utf-8")
-    (work_dir / "pytest_stderr.txt").write_text(proc.stderr or "", encoding="utf-8")
+    with open(log_path, "w", encoding="utf-8") as logf:
+        proc = subprocess.run(
+            cmd, cwd=str(work_dir), env=env,
+            stdout=logf, stderr=subprocess.STDOUT, timeout=timeout_sec
+        )
     return proc.returncode
