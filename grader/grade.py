@@ -75,14 +75,14 @@ def _parse_junit(junit_path: Path) -> dict:
     return summary
 
 
-def grade_one(sid: str, url: str, out_dir: str) -> dict:
+def grade_one(sid: str, url: str, out_dir: str, target_filename: str = "assessment-3.py") -> dict:
     work = prepare_workdir(out_dir, sid)
 
     # 1) 提出物取得
     submission_path = work / "submission.py"
     result = {"student_id": sid, "gist_url": url, "notes": ""}
     try:
-        detect_and_fetch(url, str(submission_path))
+        detect_and_fetch(url, str(submission_path), target_filename=target_filename)
     except FetchError as e:
         result.update({
             "passed": 0, "failed": 0, "errors": 0, "skipped": 0, "total_tests": 0,
@@ -94,8 +94,9 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
     # 2) フィクスチャ配置
     copy_fixtures(work)
 
-    # 3) テスト実行
-    _ = run_pytests(work)
+    # 3) テスト実行（assessment-2/3 でディレクトリ切替）
+    tests_dir = _pick_tests_dir_from_target(target_filename)
+    _ = run_pytests(work, tests_dir=tests_dir)
 
     # 4) junit.xml からパス数を集計
     junit = work / "junit.xml"
@@ -103,6 +104,7 @@ def grade_one(sid: str, url: str, out_dir: str) -> dict:
 
     result.update(summary)
     return result
+
 
 
 def grade_all(
