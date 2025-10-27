@@ -12,11 +12,15 @@ def filter_string_values_dict_in_list(listOfDicts):
         result.append(filter_string_values_in_dict(dict))
     return result
 
-def convert_to_length_tuple(listOfStrings):
-    result = []
-    for word in listOfStrings:
-        result.append((word, len(word)))
-    return result
+def convert_to_length_tuple(strings):
+    return list(map(lambda s: (s, len(s)), strings))
+
+# for loop での実装例（今回のアセスメントでは非推奨のコード）
+# def convert_to_length_tuple(listOfStrings):
+#     result = []
+#     for word in listOfStrings:
+#         result.append((word, len(word)))
+#     return result
 
 
 def get_even_numbers_from_input():
