@@ -9,6 +9,7 @@ if __name__ == "__main__":
     ap.add_argument("--sheet-tab", help="提出URLを読むワークシート名（未指定なら1枚目）")
     ap.add_argument("--out", default=".out", help="出力先ディレクトリ")
     ap.add_argument("--target-file", default=None, help="取得するファイル名（例: assessment-3.py / assessment-2.py）")
+    ap.add_argument("--variant", default="", help="同名(assessment-3.py)で内容が異なるテストを使う場合の識別子（例: dig）")
     ap.add_argument("--push-to-sheets", action="store_true", help="Google Sheetsに追記")
     args = ap.parse_args()
 
@@ -30,4 +31,5 @@ if __name__ == "__main__":
         sheet_id=args.sheet_id,
         sheet_tab=args.sheet_tab,
         target_filename=target_file,
+        variant=args.variant,
     )

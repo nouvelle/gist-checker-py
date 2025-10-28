@@ -10,21 +10,17 @@ from grader.fetch import detect_and_fetch, FetchError
 from grader.sandbox import prepare_workdir, copy_fixtures, run_pytests
 from grader.report import write_reports, push_results_wide_to_google_sheets
 
-
-def _pick_tests_dir_from_target(target_filename: str) -> str:
-    """
-    target_filename からテストディレクトリを判定。
-    - assessment-2.py → tests_assessment_2
-    - assessment-3.py → tests_assessment_3
-    """
-    u = (target_filename or "").lower()
-    if "assessment-2.py" in u:
-        return "tests_assessment_2"
-    if "assessment-3.py" in u:
-        return "tests_assessment_3"
-    return "tests_assessment_3"  # デフォルト
-
-
+def _pick_tests_dir_from_target(target_filename: str, variant: str = "") -> str:
+    # MOD: variant に応じたテストディレクトリの振り分けを追加
+    mapping = {
+        "assessment-3.py": "tests_assessment_3",
+        "assessment-2.py": "tests_assessment_2",
+    }
+    # variant=dig × assessment-3.py → tests_dig-assessment_3 を使用
+    if variant.strip().lower() == "dig" and target_filename == "assessment-3.py":
+        return "tests_dig-assessment_3"
+    # 既定は従来どおり
+    return mapping.get(target_filename, "tests_assessment_3")
 
 def _parse_junit(junit_path: Path) -> dict:
     """junit.xml からテスト結果を集計（何問中いくつパスしたか＋各テストの結果）。"""
@@ -75,7 +71,7 @@ def _parse_junit(junit_path: Path) -> dict:
     return summary
 
 
-def grade_one(sid: str, url: str, out_dir: str, target_filename: str = "assessment-3.py") -> dict:
+def grade_one(sid: str, url: str, out_dir: str, target_filename: str = "assessment-3.py", variant: str = "") -> dict:
     work = prepare_workdir(out_dir, sid)
 
     # 1) 提出物取得
@@ -95,7 +91,7 @@ def grade_one(sid: str, url: str, out_dir: str, target_filename: str = "assessme
     copy_fixtures(work)
 
     # 3) テスト実行（assessment-2/3 でディレクトリ切替）
-    tests_dir = _pick_tests_dir_from_target(target_filename)
+    tests_dir = _pick_tests_dir_from_target(target_filename, variant)
     _ = run_pytests(work, tests_dir=tests_dir)
 
     # 4) junit.xml からパス数を集計
@@ -113,7 +109,8 @@ def grade_all(
     push_to_sheets: bool = False,
     sheet_id: str | None = None,
     sheet_tab: str | None = None,
-    target_filename: str = "assessment-3.py"
+    target_filename: str = "assessment-3.py",
+    variant: str = ""
 ) -> None:
     from grader.sources import load_from_file, load_from_sheet
 
@@ -124,7 +121,7 @@ def grade_all(
         urls = load_from_file(list_path)
 
     results = [
-        grade_one(sid, url, out_dir, target_filename=target_filename)
+        grade_one(sid, url, out_dir, target_filename=target_filename, variant=variant)
         for sid, url in urls
     ]
     write_reports(results, out_dir)

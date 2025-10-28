@@ -21,6 +21,10 @@ on:
         description: "採点対象のファイル名（assessment-2.py / assessment-3.py）"
         default: "assessment-3.py"
         required: true
+      variant:
+        description: "同名(assessment-3.py)で内容が異なるテストを使う場合の識別子。例: dig"
+        default: ""
+        required: false
 
 jobs:
   grade:
@@ -67,7 +71,8 @@ jobs:
             --sheet-id "${SHEET_ID}" \
             --sheet-tab "${{ github.event.inputs.sheet_tab }}" \
             --out .out --push-to-sheets \
-            --target-file "${{ github.event.inputs.target_file }}"
+            --target-file "${{ github.event.inputs.target_file }}"\
+            --variant "${{ github.event.inputs.variant }}"
 
       - name: Debug outputs
         if: always()

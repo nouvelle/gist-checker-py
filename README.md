@@ -1,6 +1,9 @@
 # Python 自動採点ツール
 
-GitHub Actions 上で、受講生の **Gist 提出**（`assessment-3.py`）を自動で取得→テスト実行→**Google スプレッドシートに結果を書き込み**ます。ローカルでも同じ処理を実行できます。
+（`assessment-3.py`）を自動で取得→テスト実行→**Google スプレッドシートに結果を書き込み**ます。ローカルでも同じ処理を実行できます。
+
+このリポジトリは、GitHub Actions 上で、受講生が **Gist にアップした Python の課題** (`assessment-2.py` / `assessment-3.py`) を自動採点するツールです。  
+提出された Gist または Google Sheets 上の URL からコードを取得し、pytest によるテスト結果を収集・集計します。
 
 ---
 
@@ -57,14 +60,22 @@ GitHub Actions 上で、受講生の **Gist 提出**（`assessment-3.py`）を�
 1. GitHub の **Actions → Grade Submissions** を開く
 2. **Run workflow** を押し、必要なら以下を入力
 
-   * `sheet_id`：空なら Secrets の `GOOGLE_SHEET_ID` を使用
-   * `sheet_tab`：提出一覧を読むタブ名（未指定なら先頭シート）
-   * `result_tab`：結果を書き込むタブ名（既定: `results`）
-   * `gists_path`：`gists.txt` を使う場合のみ（通常は空でOK）
+   | 入力項目 | 例 |
+   |-----------|------|
+   | Gist URL を読み込む Google スプレッドシートの ID（任意、省略時はシークレットの値を使用） | 
+   | 読み込むワークシート名（任意、省略時は最初のシートを使用） |
+   | 結果を書き込むワークシート名 |
+   | 採点対象のファイル名（assessment-2.py / assessment-3.py） |
+   | 識別子（任意） | dig |
+
+   ※ DIG 用の aseessent3 を実行させたい場合は、下記のように入力してください。
+   - **target_file**: `assessment-3.py`（既定）
+   - **variant**: `dig`
+
 3. 実行後：
 
    * **Artifacts** に `.out/` 一式（各受講生の `junit.xml` / `pytest.out` / `summary_debug.json` 等）
-   * 指定の `result_tab` に結果（横展開）を**追記**
+   * 指定したワークシートに結果を追記
 
 ### B. ローカルで実行
 
@@ -73,12 +84,16 @@ python -m venv .venv && source .venv/bin/activate  # Windows: .venv\Scripts\acti
 pip install -r requirements.txt
 
 # gists.txt から読む場合
-python run.py --gists gists.txt --out .out
+python run.py --gists gists.txt --out .out --target-file assessment-3.py
 
 # Google Sheets から読む場合（結果を書き込みたいときは --push-to-sheets）
 export GOOGLE_SERVICE_ACCOUNT_JSON='...JSONの中身...'
 export GOOGLE_SHEET_ID='xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx'
-python run.py --sheet-id $GOOGLE_SHEET_ID --sheet-tab <入力タブ名> --out .out --push-to-sheets
+python run.py --sheet-id $GOOGLE_SHEET_ID --sheet-tab <入力タブ名> --out .out --push-to-sheets --target-file assessment-2.py
+
+
+# `variant=dig` のとき、テストディレクトリは `tests_xxx-assessment_3` を使用します。
+python run.py --sheet-id $GOOGLE_SHEET_ID --sheet-tab <入力タブ名> --out .out --push-to-sheets --target-file assessment-3.py --variant dig
 ```
 
 ---
@@ -111,32 +126,6 @@ python run.py --sheet-id $GOOGLE_SHEET_ID --sheet-tab <入力タブ名> --out .o
 
 ---
 
-## テスト仕様（課題要件）
-
-生徒の提出ファイル：**`assessment-3.py`**（Gist）。採点器では `submission.py` として実行。
-
-1. `load_game_data(filename)`
-
-   * CSV を DataFrame で返す
-   * ファイル未存在などの読み込みエラーは **`GameDataError`** を送出
-2. `get_average_score_by_game(df)`
-
-   * ゲームごとの平均スコア（`pd.Series`）
-3. `get_player_info(df, player_name)`
-
-   * 指定プレイヤーの情報（`pd.Series`）。見つからない場合 **`KeyError`**（メッセージに名前を含める）
-4. `filter_high_score_players(df, min_score)`
-
-   * `min_score` 以上の行を返す。`min_score` が数値でない場合は **`TypeError("最小スコアは数値で指定してください")`**
-5. `plot_score_chart(average_scores_series, filename)`
-
-   * タイトル「**ゲームごとの平均スコア**」/ X「**ゲーム**」/ Y「**平均スコア**」の棒グラフを保存
-   * 非インタラクティブ（`MPLBACKEND=Agg`）で保存できること
-
-> 付属の `fixtures/game_scores.csv` を使用。テストは `tests/` を参照してください。
-
----
-
 ## 処理フロー
 
 ```
@@ -144,7 +133,7 @@ Google Sheets（入力: Name, Gist URL）
            │
 workflow_dispatch（GitHub Actions）
            │
-  fetch：Gist から assessment-3.py を保存（submission.py として）
+  fetch：Gist から assessment-3|2.py を保存（submission.py として）
            │
   pytest：tests/*.py を実行 → junit.xml / pytest.out 生成
            │
@@ -155,27 +144,21 @@ workflow_dispatch（GitHub Actions）
 
 ---
 
-## リポジトリ構成（抜粋）
+## ディレクトリ構成（概要）
 
 ```
 .
-├─ run.py
-├─ requirements.txt
-├─ fixtures/                # 課題で使うCSVなど
-│  └─ game_scores.csv
-├─ tests/                   # 採点用テスト
-│  ├─ conftest.py
-│  ├─ test_01_load_game_data.py
-│  ├─ test_02_get_average_score_by_game.py
-│  ├─ test_03_get_player_info.py
-│  ├─ test_04_filter_high_score_players.py
-│  └─ test_05_plot_score_chart.py
-├─ grader/
-│  ├─ fetch.py              # Gist 取得
-│  ├─ sandbox.py            # pytest 実行（Agg/タイムアウト、JUnit出力）
-│  ├─ grade.py              # JUnit/pytest.out の堅牢集計
-│  └─ report.py             # CSV出力 & Sheets 追記（横展開）
-└─ .github/workflows/grade.yml
+├── run.py
+├── fixtures/                # 課題で使うデータ (例: game_scores.csv)
+├── tests_assessment_2/      # assessment-2 用のテスト
+├── tests_assessment_3/      # assessment-3 用のテスト
+├── tests_dig-assessment_2/  # DIG FND の assessment-3 用のテスト
+├── grader/                  # 採点処理の内部ロジック
+│   ├── fetch.py             # Gist 取得ロジック（target_file対応済み）
+│   ├── grade.py             # pytest実行と結果集計
+│   ├── sandbox.py           # pytestサブプロセス管理
+│   └── report.py            # CSV/Sheets出力
+└── .github/workflows/grade.yml
 ```
 
 ---
@@ -196,125 +179,3 @@ workflow_dispatch（GitHub Actions）
 * ローカルでの個別確認：`.out/<ID>/pytest.out` と `junit.xml`、`summary_debug.json` を見る
 * 画像生成テストは `Agg` 前提。フォントは Noto CJK を使用
 * Actions の Artifacts は `include-hidden-files: true` で `.out` を確実に取得
-
-
-======
-
-# Gist Checker for Python Assessments
-
-このリポジトリは、Code Chrysalis の Python 課題 (`assessment-2.py` / `assessment-3.py`) を自動採点するツールです。  
-提出された Gist または Google Sheets 上の URL からコードを取得し、pytest によるテスト結果を収集・集計します。
-
----
-
-## 📦 対応バージョン
-
-| 対象ファイル | 対応テストフォルダ | 説明 |
-|---------------|--------------------|------|
-| `assessment-3.py` | `tests/` | 従来のテスト（ゲームスコア課題など） |
-| `assessment-2.py` | `tests_assessment_2/` | 追加課題用。pytestファイルを配置してください。 |
-
----
-
-## 🚀 ワークフロー実行方法（GitHub Actions）
-
-このリポジトリには `.github/workflows/grade.yml` が含まれています。  
-`workflow_dispatch` に対応しているため、**手動実行時に入力フォームから設定**できます。
-
-### 1️⃣ ワークフロー入力項目
-
-| 入力項目 | 説明 | 例 |
-|-----------|------|----|
-| **mode** | `gists`（テキストファイル入力）または `sheet`（Google Sheets入力） | gists |
-| **gists_file** | Gist一覧を記したテキストファイルのパス | gists.txt |
-| **sheet_id** | Google Sheets の ID（mode=sheet の場合） | `1AbCdEfgHIjK...` |
-| **sheet_tab** | 読み込むシートタブ名 | submissions |
-| **out_dir** | 採点結果の出力先ディレクトリ | `.out` |
-| **push_to_sheets** | `true` で採点結果をシートに追記 | false |
-| **target_file** | 採点対象ファイル名（例: `assessment-2.py` / `assessment-3.py`） | `assessment-3.py` |
-
----
-
-### 2️⃣ 実行例
-
-#### ✅ Gist モード（gists.txtから採点）
-
-```
-mode: gists
-gists_file: gists.txt
-target_file: assessment-2.py
-out_dir: .out
-```
-
-#### ✅ Google Sheets モード（Sheetから採点）
-
-```
-mode: sheet
-sheet_id: 1AbCdEfgHIjK...
-sheet_tab: Submissions
-push_to_sheets: true
-target_file: assessment-3.py
-```
-
-> 🔐 `GOOGLE_SERVICE_ACCOUNT_JSON` を GitHub Secrets に設定しておく必要があります。
-
----
-
-## ⚙️ ローカル実行（手動テスト）
-
-ローカルでテストしたい場合は次のように実行します。
-
-### Gists モード
-```bash
-python run.py --gists gists.txt --out .out --target-file assessment-3.py
-```
-
-### Sheets モード
-```bash
-export GOOGLE_SERVICE_ACCOUNT_JSON='...JSON文字列...'
-export GOOGLE_SHEET_ID='1AbCdEfgHIjK...'
-python run.py --sheet-id $GOOGLE_SHEET_ID --sheet-tab submissions --out .out --push-to-sheets --target-file assessment-2.py
-```
-
----
-
-## 🧪 ディレクトリ構成（概要）
-
-```
-.
-├── run.py
-├── fixtures/                # 課題で使うデータ (例: game_scores.csv)
-├── tests_assessment_3/      # assessment-3 用のテスト
-├── tests_assessment_2/      # assessment-2 用のテスト
-├── grader/                  # 採点処理の内部ロジック
-│   ├── fetch.py             # Gist 取得ロジック（target_file対応済み）
-│   ├── grade.py             # pytest実行と結果集計
-│   ├── sandbox.py           # pytestサブプロセス管理
-│   └── report.py            # CSV/Sheets出力
-└── .github/workflows/grade.yml
-```
-
----
-
-## 🧰 主な更新点
-
-- `--target-file` フラグで **任意のファイル名を指定可能**
-- **GitHub Actionsのinputsから `target_file` を受け取れる**
-- 対話的な `input()` は廃止（CI対応）
-- `assessment-3.py` / `assessment-2.py` の両方を柔軟に採点可能
-
----
-
-## ✅ 実装メモ
-
-- Gist ページ or raw URL のどちらにも対応
-- `target_file` に一致するファイルが Gist に見つからなければ `FetchError`
-- pytest 結果は `.out/<student_id>/` に出力
-- CSV / JSON レポートは `.out/results.csv` および `.out/results.json` に保存されます
-
----
-
-## 🧩 拡張予定（任意）
-
-- `assessment-1.py` など他の課題にも対応可能（`fetch.py` の RAW_RE に追加するだけ）
-- `tests_assessment_2/` 内で input() や lambda, filter, map 等の課題も自由にテスト可能
